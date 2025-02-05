@@ -1,0 +1,102 @@
+#!/usr/bin/env bash
+
+# Copyright (C) 2025-present StellarSand
+
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+session_type=$XDG_SESSION_TYPE # Detect Wayland or X11
+
+successFail() {
+	if [ $? -eq 0 ]
+	then
+		echo -e "Done.\n"
+	else
+		echo -e "Some error occurred performing the task.\n"
+		exit 1
+	fi
+}
+
+hasCommand() {
+    if ! (command -v "$1" > /dev/null)
+    then
+        return 1
+    fi
+}
+
+installPackage() {
+    echo "Installing $1 ..."
+
+    if hasCommand "apt"
+	then
+        sudo apt install -y "$1"
+    elif hasCommand "dnf"
+	then
+        sudo dnf install -y "$1"
+    elif hasCommand "pacman"
+	then
+        sudo pacman -S --noconfirm "$1"
+	elif hasCommand "yay"
+	then
+        sudo yay -S --noconfirm "$1"
+    else
+        echo "Unsupported package manager. Please install $1 manually."
+        exit 1
+    fi
+
+    successFail
+}
+
+echo "Checking required dependencies ..."
+if [ "$session_type" == "wayland" ]
+then
+	if ! hasCommand "wl-paste"
+	then
+		installPackage "wl-clipboard"
+	fi
+elif [ "$session_type" == "x11" ]
+then
+	if ! hasCommand "wl-paste"
+	then
+		installPackage "xclip"
+	fi
+else
+	echo "Unsupported session type: $session_type"
+    exit 1
+fi
+
+echo "Installing ..."
+if ! [ -d ~/.config/systemd/user/ ]
+then
+	mkdir ~/.config/systemd/user/
+fi
+if ! [ -d ~/.local/bin ]
+then
+	mkdir ~/.local/bin/
+fi
+cp ./service/clean-slate.service ~/.config/systemd/user/
+cp ./service/clean-slate.timer ~/.config/systemd/user/
+cp clean-slate ~/.local/bin/
+successFail
+
+echo "Fixing permissions ..."
+chmod +x  ~/.local/bin/clean-slate
+successFail
+
+echo "Setting up service ..."
+sed -i "s|ExecStart=.*|ExecStart=$HOME/.local/bin/clean-slate|" ~/.config/systemd/user/clean-slate.service
+systemctl --user daemon-reload
+systemctl --user enable --now clean-slate.timer
+successFail
+
+exit 0

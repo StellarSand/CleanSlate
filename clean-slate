@@ -1,0 +1,68 @@
+#!/usr/bin/env bash
+
+# Copyright (C) 2025-present StellarSand
+
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+current_clipboard=""
+log_file="~./var/log/clean-slate.log"
+session_type=$XDG_SESSION_TYPE # Detect Wayland or X11
+
+hasCommand() {
+    if ! (command -v "$1" > /dev/null)
+    then
+        echo "$(date '+%Y-%m-%d %H:%M:%S') - ERROR: $1 package does not exist. Please install it first and try again." >> "$log_file"
+        exit 1
+    fi
+}
+
+getCurrentClipboard() {
+    if [ "$session_type" == "wayland" ] && hasCommand "wl-paste"
+    then
+        current_clipboard=$(wl-paste)
+    elif [ "$session_type" == "x11" ] && hasCommand "xclip"
+    then
+        current_clipboard=$(xclip -selection clipboard -o)
+    else
+        echo "$(date '+%Y-%m-%d %H:%M:%S') - ERROR: Unable to get current clipboard content." >> "$log_file"
+        exit 1
+    fi
+}
+
+clearClipboard() {
+    if [ "$session_type" == "wayland" ] && hasCommand "wl-copy"
+    then
+        wl-copy < /dev/null
+    elif [ "$session_type" == "x11" ] && hasCommand "xclip"
+    then
+        xclip -selection clipboard /dev/null
+    else
+        echo "$(date '+%Y-%m-%d %H:%M:%S') - ERROR: Unable to clear clipboard" >> "$log_file"
+        exit 1
+    fi
+}
+
+if [ ! -f $log_file ]
+then
+    touch $log_file
+fi
+
+getCurrentClipboard
+
+if [ -n "$current_clipboard" ]
+then
+    clearClipboard
+fi
+
+exit 0
